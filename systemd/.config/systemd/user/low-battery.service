@@ -1,0 +1,6 @@
+[Unit]
+Description=Low battery notification
+
+[Service]
+Type=oneshot
+ExecStart=%h/.config/waybar/scripts/low-battery.sh

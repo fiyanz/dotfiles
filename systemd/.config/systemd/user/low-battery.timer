@@ -1,0 +1,10 @@
+[Unit]
+Description=Check battery level every minute
+
+[Timer]
+OnActiveSec=30s
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

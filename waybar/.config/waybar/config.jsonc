@@ -1,0 +1,78 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 32,
+    "spacing": 0,
+    "modules-left": ["niri/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["custom/dnd", "pulseaudio#mic", "pulseaudio", "bluetooth", "network", "battery", "custom/power"],
+
+    "clock": {
+        "format": "{:%H:%M}",
+        "tooltip": false,
+        "on-click": "~/.config/waybar/scripts/calendar-media.py"
+    },
+
+    "pulseaudio#mic": {
+        "format": "{format_source}",
+        "format-source": "<span size='18pt' rise='-2048'></span> {volume}%",
+        "format-source-muted": "<span size='18pt' rise='-2048'></span> mute",
+        "on-click": "~/.config/waybar/scripts/settings-popup.py mic",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",
+        "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 5%+",
+        "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 5%-"
+    },
+
+    "pulseaudio": {
+        "format": "<span size='18pt' rise='-2048'>{icon}</span> {volume}%",
+        "format-muted": "<span size='18pt' rise='-2048'></span> mute",
+        "format-icons": { "default": ["", "", ""] },
+        "on-click": "~/.config/waybar/scripts/settings-popup.py volume",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+        "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
+        "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+    },
+
+    "bluetooth": {
+        "format": "<span size='13pt' rise='-1024'></span>",
+        "format-off": "<span size='13pt' rise='-1024'></span>",
+        "format-disabled": "<span size='13pt' rise='-1024'></span>",
+        "format-connected": "<span size='13pt' rise='-1024'></span> {num_connections}",
+        "tooltip-format": "{controller_alias}: {status}",
+        "tooltip-format-connected": "{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}",
+        "on-click": "~/.config/waybar/scripts/settings-popup.py bluetooth"
+    },
+
+    "custom/power": {
+        "format": "<span size='18pt' rise='-2048'></span>",
+        "tooltip": false,
+        "on-click": "~/.config/waybar/scripts/settings-popup.py power"
+    },
+
+    "network": {
+        "format-wifi": "<span size='18pt' rise='-2048'></span> {essid}",
+        "format-ethernet": "<span size='18pt' rise='-2048'></span> eth",
+        "format-disconnected": "<span size='18pt' rise='-2048'></span> offline",
+        "tooltip-format-wifi": "{essid}\n{ipaddr}\n{signalStrength}%",
+        "on-click": "~/.config/waybar/scripts/settings-popup.py wifi"
+    },
+
+    "battery": {
+        "format": "<span size='18pt' rise='-2048'>{icon}</span> {capacity}%",
+        "format-charging": "<span size='13pt' rise='-1024'></span> {capacity}%",
+        "format-icons": ["", "", "", "", ""],
+        "states": { "warning": 25, "critical": 10 },
+        "on-click": "~/.config/waybar/scripts/settings-popup.py battery"
+    },
+
+    "custom/dnd": {
+        "exec": "makoctl mode | grep -q do-not-disturb && echo '{\"alt\":\"dnd\"}' || echo '{\"alt\":\"default\"}'",
+        "return-type": "json",
+        "format": "{icon}",
+        "format-icons": { "dnd": "<span size='18pt' rise='-2048'></span>", "default": "<span size='13pt' rise='-1024'></span>" },
+        "interval": 1,
+        "on-click": "~/.config/waybar/scripts/settings-popup.py dnd",
+        "on-click-right": "makoctl mode -t do-not-disturb"
+    }
+}
