@@ -17,7 +17,7 @@ cd ~/Projects/my-projects/dotfiles
 ./install.sh
 ```
 
-Conflicting files are moved to `~/.config-backup-<timestamp>`. The login screen is not changed. Wallpapers are not included: put images in `~/Pictures/wp` and choose one with `waypaper`.
+Conflicting files are moved to `~/.config-backup-<timestamp>`. The login screen is not changed. Wallpapers are not included: put images in `~/Pictures/wp` and choose one with `waypaper`. It also sets OnlyOffice to the system title bar, so its gaps match other windows under niri.
 
 ## Login screen (optional)
 

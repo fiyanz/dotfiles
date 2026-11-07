@@ -50,6 +50,7 @@ button {
     text-shadow: none;
 }
 button:hover { background: #333333; }
+button:checked { background: #333333; }
 button.on { background: #ffffff; }
 button.on label { color: #111111; font-weight: bold; }
 button.warn { background: #7a2e2e; }
@@ -70,6 +71,42 @@ scale slider {
 def label(text="", name=None, **kwargs):
     kwargs.setdefault("xalign", 0)
     return Gtk.Label(label=text, name=name, **kwargs)
+
+
+ERROR_HINTS = [
+    (("secrets were required", "802-1x supplicant", "wrong password", "psk",
+      "no secrets", "authentication"), "Wrong password"),
+    (("no network with ssid", "not found", "not available"), "Network not found"),
+    (("timed out", "timeout"), "Timed out"),
+    (("not authorized", "permission", "insufficient privileges"), "Permission denied"),
+    (("not installed",), None),
+]
+
+
+def short_error(message):
+    """Turn a long tool error into one short line."""
+    text = " ".join((message or "").split())
+    if not text:
+        return ""
+    lower = text.lower()
+    for keys, short in ERROR_HINTS:
+        if any(k in lower for k in keys):
+            return short or text
+    text = re.sub(r"^(error|failed)[:\s]+", "", text, flags=re.I)
+    text = text.split(". ")[0].rstrip(".")
+    return text if len(text) <= 48 else text[:47] + "…"
+
+
+class ErrorLabel(Gtk.Label):
+    """Single-line error; the full message stays available as a tooltip."""
+
+    def __init__(self):
+        super().__init__(name="error", xalign=0, ellipsize=3, max_width_chars=1,
+                         hexpand=True)
+
+    def set_text(self, text):
+        super().set_text(short_error(text))
+        self.set_tooltip_text(text or None)
 
 
 def row(*children):
@@ -107,8 +144,18 @@ def add_wifi_with_password(iface, ssid, password):
           "org.freedesktop.NetworkManager")
     device = bus.call_sync(*nm, "GetDeviceByIpIface", GLib.Variant("(s)", (iface,)),
                            None, Gio.DBusCallFlags.NONE, 10000, None).unpack()[0]
+    forget_wifi(ssid)
     bus.call_sync(*nm, "AddAndActivateConnection", wifi_settings(ssid, password, device),
                   None, Gio.DBusCallFlags.NONE, 30000, None)
+
+
+def forget_wifi(ssid):
+    """Delete saved profiles for this SSID so a new password replaces the old one."""
+    ok, out, _ = run_cmd(["nmcli", "-t", "-f", "UUID,TYPE,NAME", "connection", "show"])
+    for line in out.splitlines() if ok else ():
+        fields = nmcli_fields(line)
+        if len(fields) >= 3 and fields[1] == "802-11-wireless" and fields[2] == ssid:
+            run_cmd(["nmcli", "connection", "delete", "uuid", fields[0]])
 
 
 def wifi_settings(ssid, password, device):
@@ -416,13 +463,24 @@ class Popup(Gtk.ApplicationWindow):
         networks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         scroller.add(networks)
         self.box.add(scroller)
-        error = label(name="error", wrap=True)
+        error = ErrorLabel()
         self.box.add(error)
         state = {"sig": None, "editing": False, "iface": None}
 
-        def connect(ssid):
+        def connect(holder, ssid, secure):
             status.set_text(f"Connecting to {ssid}...")
-            self.run_then_refresh(["nmcli", "device", "wifi", "connect", ssid], error)
+
+            def done(ok, _out, err):
+                if ok or not secure:
+                    error.set_text("" if ok else (err or "Failed"))
+                    refresh()
+                    return
+                # Saved password is wrong or missing: ask for a new one.
+                status.set_text(f"Enter a new password for {ssid}")
+                error.set_text(err or "Failed")
+                ask_password(holder, ssid)
+
+            self.run(["nmcli", "device", "wifi", "connect", ssid], done)
 
         def connect_password(ssid, password):
             status.set_text(f"Connecting to {ssid}...")
@@ -449,9 +507,19 @@ class Popup(Gtk.ApplicationWindow):
             state["editing"] = True
             if len(holder.get_children()) > 1:
                 return
-            entry = Gtk.Entry(visibility=False, placeholder_text="Password")
+            entry = Gtk.Entry(visibility=False, placeholder_text="Password", hexpand=True)
             entry.connect("activate", lambda e: connect_password(ssid, e.get_text()))
-            holder.add(entry)
+            eye = Gtk.ToggleButton(label="\uf06e", tooltip_text="Show password")
+
+            def toggle_visible(button):
+                shown = button.get_active()
+                entry.set_visibility(shown)
+                button.set_label("\uf070" if shown else "\uf06e")
+                button.set_tooltip_text("Hide password" if shown else "Show password")
+                entry.grab_focus_without_selecting()
+
+            eye.connect("toggled", toggle_visible)
+            holder.add(row(entry, eye))
             holder.show_all()
             entry.grab_focus()
 
@@ -472,9 +540,18 @@ class Popup(Gtk.ApplicationWindow):
                 elif secure and not known:
                     ask_password(holder, ssid)
                 else:
-                    connect(ssid)
+                    connect(holder, ssid, secure)
+
+            def pressed(_, event):
+                # Right-click: enter a new password for a secured network.
+                if event.button == 3 and secure:
+                    error.set_text("")
+                    ask_password(holder, ssid)
+                    return True
+                return False
 
             button.connect("clicked", clicked)
+            button.connect("button-press-event", pressed)
             holder.add(button)
             networks.add(holder)
 
@@ -548,7 +625,7 @@ class Popup(Gtk.ApplicationWindow):
         self.box.add(scroller)
         scan = Gtk.Button(label="Scan for devices")
         self.box.add(scan)
-        error = label(name="error", wrap=True)
+        error = ErrorLabel()
         self.box.add(error)
         state = {"sig": None}
 
@@ -665,7 +742,7 @@ class Popup(Gtk.ApplicationWindow):
         save = Gtk.Button(label="Save for next login")
         save.connect("clicked", lambda _: self.apply_display(save_outputs, error, "Saved"))
         self.box.add(save)
-        error = label(name="error", wrap=True)
+        error = ErrorLabel()
         self.box.add(error)
         state = {"internal": None, "external": None, "sig": None}
         self.display_error = error
@@ -783,7 +860,7 @@ class Popup(Gtk.ApplicationWindow):
     # ---- power ----
     def build_power(self):
         self.header("Power")
-        error = label(name="error", wrap=True)
+        error = ErrorLabel()
         grid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.box.add(grid)
         self.box.add(error)

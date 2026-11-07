@@ -41,6 +41,24 @@ if command -v gsettings >/dev/null; then
     gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark || true
 fi
 
+# OnlyOffice draws its own frame with a wide transparent margin; use the system frame
+# so its gaps match other windows under niri. OnlyOffice rewrites this file on exit.
+onlyoffice="$HOME/.config/onlyoffice/DesktopEditors.conf"
+if pgrep -x DesktopEditors >/dev/null; then
+    echo "Close OnlyOffice and run install.sh again to set its title bar." >&2
+elif [ -f "$onlyoffice" ]; then
+    if grep -q '^titlebar=' "$onlyoffice"; then
+        sed -i 's/^titlebar=.*/titlebar=system/' "$onlyoffice"
+    elif grep -q '^\[General\]' "$onlyoffice"; then
+        sed -i '/^\[General\]/a titlebar=system' "$onlyoffice"
+    else
+        printf '[General]\ntitlebar=system\n' >> "$onlyoffice"
+    fi
+else
+    mkdir -p "$HOME/.config/onlyoffice"
+    printf '[General]\ntitlebar=system\n' > "$onlyoffice"
+fi
+
 if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
     systemctl --user daemon-reload
     systemctl --user enable --now low-battery.timer
