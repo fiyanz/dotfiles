@@ -28,6 +28,7 @@ Conflicting files are moved to `~/.config-backup-<timestamp>`. The login screen 
 | Key | Action |
 |---|---|
 | `Mod+P` | Display panel |
+| `Mod+Shift+S` | Screenshot menu (area, window, screen) |
 | `Super+Alt+L` | Lock screen |
 | `Mod+Alt+V` | Clipboard history |
 | `Mod+Shift+Print` | Edit latest screenshot |

@@ -248,7 +248,7 @@ spawn-at-startup "mako"
 spawn-at-startup "/usr/lib/polkit-gnome-authentication-agent-1"
 spawn-at-startup "waypaper" "--restore"
 spawn-at-startup "sh" "-c" "exec ~/.config/waybar/scripts/display-guard.sh"
-spawn-at-startup "swayidle" "-w" "timeout" "300" "pidof hyprlock || hyprlock &" "timeout" "600" "niri msg action power-off-monitors" "before-sleep" "pidof hyprlock || hyprlock &"
+spawn-at-startup "swayidle" "-w" "timeout" "300" "~/.config/waybar/scripts/idle-guard.sh 300 sh -c 'pidof hyprlock || hyprlock' &" "resume" "pkill -x idle-guard.sh" "timeout" "600" "~/.config/waybar/scripts/idle-guard.sh 600 niri msg action power-off-monitors &" "resume" "pkill -x idle-guard.sh" "before-sleep" "pidof hyprlock || hyprlock &"
 spawn-at-startup "wl-paste" "--watch" "cliphist" "store"
 
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
@@ -602,8 +602,9 @@ binds {
     // Mod+Shift+Space { switch-layout "prev"; }
 
     Print { screenshot; }
-    Ctrl+Print { screenshot-screen; }
-    Alt+Print { screenshot-window; }
+    Ctrl+Print repeat=false { spawn "sh" "-c" "exec ~/.config/waybar/scripts/screenshot.sh screen"; }
+    Alt+Print repeat=false { spawn "sh" "-c" "exec ~/.config/waybar/scripts/screenshot.sh window"; }
+    Mod+Shift+S hotkey-overlay-title="Screenshot Menu" { spawn "sh" "-c" "exec ~/.config/waybar/scripts/settings-popup.py screenshot"; }
     Mod+Shift+Print hotkey-overlay-title="Edit Latest Screenshot: satty" { spawn "sh" "-c" "exec ~/.config/waybar/scripts/edit-screenshot.sh"; }
     Mod+P hotkey-overlay-title="Display Settings" { spawn "sh" "-c" "exec ~/.config/waybar/scripts/settings-popup.py display"; }
     Mod+Alt+V hotkey-overlay-title="Clipboard History: cliphist" { spawn-sh "cliphist list | fuzzel --dmenu --prompt 'Clipboard: ' | cliphist decode | wl-copy"; }

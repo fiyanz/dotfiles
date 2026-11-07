@@ -33,3 +33,4 @@ ttf-jetbrains-mono-nerd
 cosmic-icon-theme
 stow
 adw-gtk-theme
+jq

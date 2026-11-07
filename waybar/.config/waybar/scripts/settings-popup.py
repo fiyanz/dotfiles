@@ -31,19 +31,21 @@ window { background: transparent; }
 #panel {
     background: rgba(17, 17, 17, 0.97);
     border: 1px solid #333333;
-    border-radius: 14px;
+    border-radius: 0;
     padding: 14px;
 }
 #heading { font-size: 15px; font-weight: bold; color: #ffffff; }
 #big { font-size: 26px; font-weight: bold; color: #ffffff; }
 #muted { color: #909090; font-size: 12px; }
+#notif { background: #1e1e1e; padding: 8px 10px; }
+#notif-title { color: #ffffff; font-weight: bold; }
 #error { color: #e06060; font-size: 12px; }
 button {
     background: #1e1e1e;
     background-image: none;
     border: none;
     box-shadow: none;
-    border-radius: 8px;
+    border-radius: 0;
     padding: 7px 10px;
     text-shadow: none;
 }
@@ -51,10 +53,10 @@ button:hover { background: #333333; }
 button.on { background: #ffffff; }
 button.on label { color: #111111; font-weight: bold; }
 button.warn { background: #7a2e2e; }
-entry { background: #1e1e1e; border: 1px solid #333333; border-radius: 8px; padding: 6px; box-shadow: none; }
-switch { background: #3a3a3a; background-image: none; border: none; border-radius: 12px; }
+entry { background: #1e1e1e; border: 1px solid #333333; border-radius: 0; padding: 6px; box-shadow: none; }
+switch { background: #3a3a3a; background-image: none; border: none; border-radius: 0; }
 switch:checked { background: #ffffff; }
-switch slider { background: #909090; background-image: none; border: none; border-radius: 10px; box-shadow: none; }
+switch slider { background: #909090; background-image: none; border: none; border-radius: 0; box-shadow: none; }
 switch:checked slider { background: #111111; }
 scale trough { background: #3a3a3a; min-height: 4px; border-radius: 2px; border: none; }
 scale highlight { background: #ffffff; border-radius: 2px; border: none; }
@@ -122,7 +124,7 @@ def wifi_settings(ssid, password, device):
 class Popup(Gtk.ApplicationWindow):
     # Distance from the right screen edge, roughly under each Waybar icon.
     OFFSETS = {"power": 8, "battery": 8, "wifi": 60, "bluetooth": 150,
-               "volume": 170, "mic": 240, "dnd": 310, "display": 350}
+               "volume": 170, "mic": 240, "dnd": 310, "display": 350, "screenshot": 0}
 
     def __init__(self, app):
         super().__init__(application=app, title="settings-popup")
@@ -174,7 +176,7 @@ class Popup(Gtk.ApplicationWindow):
         self.panel_name = name
         self.refresh = None
         clear(self.box)
-        centered = name == "display"  # opened from the keyboard, not under a bar icon
+        centered = name in ("display", "screenshot")  # opened from the keyboard, not under a bar icon
         self.events.set_halign(Gtk.Align.CENTER if centered else Gtk.Align.END)
         self.events.set_margin_end(0 if centered else self.OFFSETS[name])
         getattr(self, f"build_{name}")()
@@ -296,23 +298,65 @@ class Popup(Gtk.ApplicationWindow):
 
     # ---- dnd ----
     def build_dnd(self):
-        self.header("Notifications")
         switch, set_on = self.make_switch(lambda _: self.run_then_refresh(
             ["makoctl", "mode", "-t", "do-not-disturb"]))
         self.box.add(row(label("Do not disturb"), switch))
-        clear_btn = Gtk.Button(label="Clear all notifications")
-        count = label(name="muted")
-        clear_btn.connect("clicked", lambda _: self.run_then_refresh(["makoctl", "dismiss", "--all"]))
+        scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroller.set_size_request(-1, 300)
+        entries = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        scroller.add(entries)
+        self.box.add(scroller)
+        clear_btn = Gtk.Button(label="Clear all")
         self.box.add(clear_btn)
-        self.box.add(count)
+        state = {"sig": None, "ids": []}
 
-        def show_list(ok, out, _):
-            total = len(re.findall(r"^Notification \d+", out, re.M)) if ok else 0
-            count.set_text(f"{total} active notifications")
+        def hide(ids):
+            hide_notifications(ids)
+            state["sig"] = None
+            refresh()
+
+        def clear_all(_):
+            self.run(["makoctl", "dismiss", "--all", "--no-history"],
+                     lambda *_r: hide(state["ids"]))
+
+        clear_btn.connect("clicked", clear_all)
+
+        def add_entry(item):
+            texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
+            texts.add(label(item.get("app_name") or "Notification", "muted"))
+            summary = label(item.get("summary") or "", "notif-title", ellipsize=3, max_width_chars=1)
+            texts.add(summary)
+            if item.get("body"):
+                texts.add(label(item["body"], "muted", wrap=True, max_width_chars=1, lines=3, ellipsize=3))
+            close = Gtk.Button(label="\uf00d", valign=Gtk.Align.START)
+            close.connect("clicked", lambda _, n=item["id"]: self.run(
+                ["makoctl", "dismiss", "-n", str(n), "--no-history"], lambda *_r: hide([n])))
+            card = Gtk.Box(spacing=8, name="notif")
+            card.add(texts)
+            card.add(close)
+            entries.add(card)
+
+        def show(items):
+            hidden = hidden_notifications()
+            visible = [i for i in items if i["id"] not in hidden]
+            state["ids"] = [i["id"] for i in items]
+            clear_btn.set_sensitive(bool(visible))
+            sig = [i["id"] for i in visible]
+            if sig == state["sig"]:
+                return
+            state["sig"] = sig
+            clear(entries)
+            for item in visible:
+                add_entry(item)
+            if not visible:
+                entries.add(label("No notifications", "muted", xalign=0.5, margin_top=20))
+            entries.show_all()
 
         def refresh():
             self.run(["makoctl", "mode"], lambda ok, out, _: ok and set_on("do-not-disturb" in out))
-            self.run(["makoctl", "list"], show_list)
+            self.run(["makoctl", "list", "-j"], lambda ok, active, _: self.run(
+                ["makoctl", "history", "-j"],
+                lambda ok2, past, _e: ok and ok2 and show(merge_notifications(active, past))))
 
         self.refresh = refresh
 
@@ -719,6 +763,23 @@ class Popup(Gtk.ApplicationWindow):
 
         threading.Thread(target=work, daemon=True).start()
 
+    # ---- screenshot ----
+    def build_screenshot(self):
+        self.header("Screenshot")
+        options = Gtk.Box(spacing=4, homogeneous=True)
+        script = str(Path(__file__).resolve().with_name("screenshot.sh"))
+
+        def take(_, mode):
+            subprocess.Popen([script, mode], start_new_session=True, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.close()
+
+        for text, mode in (("Area", "area"), ("Window", "window"), ("Screen", "screen")):
+            button = Gtk.Button(label=text)
+            button.connect("clicked", take, mode)
+            options.add(button)
+        self.box.add(options)
+
     # ---- power ----
     def build_power(self):
         self.header("Power")
@@ -845,6 +906,37 @@ def save_outputs():
     temp = path.with_suffix(".kdl.tmp")
     temp.write_text("\n".join(blocks) + "\n")
     os.replace(temp, path)
+
+
+def merge_notifications(active, past):
+    """Active notifications and history as one newest-first list without duplicates."""
+    items = {}
+    for text in (past, active):
+        for item in json.loads(text):
+            items[item["id"]] = item
+    return [items[key] for key in sorted(items, reverse=True)]
+
+
+def hidden_path():
+    return Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "waybar-hidden-notifications.json"
+
+
+def mako_pid():
+    return run_cmd(["pidof", "mako"])[1].strip()
+
+
+def hidden_notifications():
+    """mako cannot clear its history, so cleared ids are remembered per mako process."""
+    try:
+        data = json.loads(hidden_path().read_text())
+        return set(data["ids"]) if data["pid"] == mako_pid() else set()
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+
+
+def hide_notifications(ids):
+    data = {"pid": mako_pid(), "ids": sorted(hidden_notifications() | set(ids))}
+    hidden_path().write_text(json.dumps(data))
 
 
 def read_battery():

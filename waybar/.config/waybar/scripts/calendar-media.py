@@ -25,7 +25,7 @@ window { background: transparent; }
 #panel {
     background: rgba(17, 17, 17, 0.97);
     border: 1px solid #333333;
-    border-radius: 14px;
+    border-radius: 0;
     padding: 16px;
 }
 #weekday { font-size: 13px; color: #909090; }
@@ -39,7 +39,7 @@ calendar {
 calendar:selected { background: #ffffff; color: #111111; border-radius: 6px; }
 calendar.header, calendar.button { background: transparent; border: none; box-shadow: none; }
 calendar:indeterminate { color: #555555; }
-#media { background: #1e1e1e; border-radius: 12px; padding: 12px; }
+#media { background: #1e1e1e; border-radius: 0; padding: 12px; }
 #title { font-size: 14px; font-weight: bold; color: #ffffff; }
 #artist { font-size: 12px; color: #a0a0a0; }
 #time { font-size: 11px; color: #a0a0a0; }
@@ -47,7 +47,7 @@ calendar:indeterminate { color: #555555; }
     background: transparent;
     border: none;
     box-shadow: none;
-    border-radius: 18px;
+    border-radius: 0;
     padding: 6px;
     min-width: 24px;
     min-height: 24px;
@@ -298,7 +298,7 @@ class Popup(Gtk.ApplicationWindow):
         return False
 
     def draw_art(self, _, cr):
-        s, r = ART_SIZE, 10
+        s, r = ART_SIZE, 0
         cr.new_sub_path()
         cr.arc(s - r, r, r, -math.pi / 2, 0)
         cr.arc(s - r, s - r, r, 0, math.pi / 2)
